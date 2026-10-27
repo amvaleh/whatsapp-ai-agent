@@ -1,6 +1,7 @@
-import subprocess, anthropic
+import subprocess, os, anthropic
 
 CLAUDE_CLI = "/usr/local/bin/claude"
+CLAUDE_TOKEN_FILE = os.environ.get("CLAUDE_TOKEN_FILE", "/home/deploy/wa-agent/.claude_token")
 
 
 def build_messages(history: list) -> list:
@@ -50,20 +51,31 @@ def generate_reply(
     return response.content[0].text.strip()
 
 
+def _get_subscription_token() -> str:
+    """Read the OAuth token from file or environment."""
+    token = os.environ.get("CLAUDE_CODE_OAUTH_TOKEN")
+    if token:
+        return token
+    try:
+        with open(CLAUDE_TOKEN_FILE) as f:
+            return f.read().strip()
+    except OSError:
+        raise RuntimeError(f"No OAuth token available (checked env + {CLAUDE_TOKEN_FILE})")
+
+
 def generate_reply_cli(
     model: str,
     system_prompt: str,
     history: list,
 ) -> str:
-    """Generate reply using the local claude CLI (subscription-based)."""
-    history_text = _format_history_for_cli(history)
-    prompt = (
-        f"{history_text}\n\n"
-        "Now write only the Agent's next reply. "
-        "Reply directly as the agent, no labels or prefixes."
+    """Generate reply using Claude subscription OAuth token via SDK."""
+    token = _get_subscription_token()
+    client = anthropic.Anthropic(api_key=token)
+    messages = build_messages(history)
+    response = client.messages.create(
+        model=model,
+        max_tokens=512,
+        system=system_prompt,
+        messages=messages,
     )
-    cmd = [CLAUDE_CLI, "--print", "--model", model, "--system-prompt", system_prompt, "-p", prompt]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-    if result.returncode != 0:
-        raise RuntimeError(f"claude CLI error: {result.stderr.strip()}")
-    return result.stdout.strip()
+    return response.content[0].text.strip()
