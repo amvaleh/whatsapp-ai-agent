@@ -225,6 +225,26 @@ def view_logs():
     return page("Logs", content, "logs")
 
 
+def _check_cli_status():
+    """Return (ok: bool, message: str)"""
+    import subprocess, os
+    cli = os.environ.get("CLAUDE_CLI_PATH", "/usr/local/bin/claude")
+    if not os.path.exists(cli):
+        return False, f"claude CLI not found at {cli}. Install with: npm install -g @anthropic-ai/claude-code"
+    try:
+        r = subprocess.run(
+            [cli, "--print", "-p", "reply with just: ok", "--model", "claude-haiku-4-5-20251001"],
+            capture_output=True, text=True, timeout=20
+        )
+        if r.returncode == 0:
+            return True, "Authenticated and working"
+        return False, (r.stderr.strip() or "CLI returned non-zero exit code")
+    except subprocess.TimeoutExpired:
+        return False, "CLI timed out — may not be authenticated"
+    except Exception as e:
+        return False, str(e)
+
+
 def view_settings():
     s = db.get_all_settings()
     models = [
@@ -237,6 +257,9 @@ def view_settings():
         for m, label in models
     )
     cur_provider = s.get("provider", "anthropic_api")
+    cli_ok, cli_msg = _check_cli_status()
+    cli_color = "#4ade80" if cli_ok else "#f87171"
+    cli_icon = "✓" if cli_ok else "✗"
     content = f"""<h1>Settings</h1>
 <form id=settings-form>
 <div class=card>
@@ -252,6 +275,24 @@ def view_settings():
     <label>Anthropic API Key</label>
     <input type=password id=anthropic_api_key value="{s.get('anthropic_api_key','')}" placeholder="sk-ant-...">
     <small style="color:#64748b;font-size:12px;margin-top:4px;display:block">Get yours at console.anthropic.com</small>
+  </div>
+
+  <div id=cli-status-card style="{"" if cur_provider=="claude_cli" else "display:none"}">
+    <div style="background:#0f172a;border:1px solid #334155;border-radius:8px;padding:14px 16px;margin-bottom:12px;display:flex;align-items:center;gap:10px">
+      <span style="font-size:18px;color:{cli_color}">{cli_icon}</span>
+      <div>
+        <div style="font-size:14px;font-weight:600;color:{cli_color}">Claude CLI: {cli_msg}</div>
+        <div style="font-size:12px;color:#64748b;margin-top:2px">Status checked on page load</div>
+      </div>
+      <button type=button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="testCli()">Re-check</button>
+    </div>
+    <div style="background:#0f172a;border:1px solid #1e40af44;border-radius:8px;padding:14px 16px;font-size:13px;color:#94a3b8;line-height:1.7">
+      <strong style="color:#e2e8f0">How to authenticate on your server:</strong><br>
+      1. Install Claude CLI: <code style="background:#1e293b;padding:1px 5px;border-radius:4px">npm install -g @anthropic-ai/claude-code</code><br>
+      2. Login: <code style="background:#1e293b;padding:1px 5px;border-radius:4px">claude login</code> — opens browser OAuth for claude.ai<br>
+      3. Credentials are saved in <code style="background:#1e293b;padding:1px 5px;border-radius:4px">~/.claude/</code> and reused automatically<br>
+      4. Return here and click <strong>Re-check</strong> to confirm
+    </div>
   </div>
   <div class=form-group>
     <label>Model</label>
@@ -309,6 +350,16 @@ def view_settings():
 <script>
 function toggleApiKey(val) {{
   document.getElementById('api-key-group').style.display = val === 'claude_cli' ? 'none' : '';
+  document.getElementById('cli-status-card').style.display = val === 'claude_cli' ? '' : 'none';
+}}
+async function testCli() {{
+  const btn = event.target; btn.textContent = 'Checking...'; btn.disabled = true;
+  const r = await api('{BASE_PATH}/api/cli-status');
+  const color = r.ok ? '#4ade80' : '#f87171';
+  const icon = r.ok ? '✓' : '✗';
+  btn.closest('div').querySelector('div > div > div:first-child').style.color = color;
+  btn.closest('div').querySelector('div > div > div:first-child').textContent = 'Claude CLI: ' + r.message;
+  btn.textContent = 'Re-check'; btn.disabled = false;
 }}
 async function saveSettings() {{
   const keys = ['provider','anthropic_api_key','model','business_name','system_prompt',
@@ -363,6 +414,9 @@ class Handler(BaseHTTPRequestHandler):
             self.send_html(view_logs())
         elif path == "/settings":
             self.send_html(view_settings())
+        elif path == "/api/cli-status":
+            ok, msg = _check_cli_status()
+            self.send_json({"ok": ok, "message": msg})
         else:
             self.send_response(404); self.end_headers()
 
