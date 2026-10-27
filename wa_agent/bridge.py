@@ -19,10 +19,14 @@ def _msg_conn():
 
 def get_new_messages(since_timestamp: str):
     """Return incoming messages received after since_timestamp (ISO string)."""
+    # Normalize to SQLite-compatible format (space separator, no sub-second)
+    normalized = since_timestamp.replace("T", " ").split(".")[0]
+    if "+" not in normalized and normalized[-1] != "Z":
+        normalized += "+00:00"
     conn = _msg_conn()
     rows = conn.execute(
-        "SELECT * FROM messages WHERE is_from_me = 0 AND timestamp > ? ORDER BY timestamp ASC",
-        (since_timestamp,)
+        "SELECT * FROM messages WHERE is_from_me = 0 AND datetime(timestamp) > datetime(?) ORDER BY timestamp ASC",
+        (normalized,)
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
