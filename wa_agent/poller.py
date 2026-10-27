@@ -7,6 +7,7 @@ logger = logging.getLogger("wa_agent.poller")
 
 _stop_event = threading.Event()
 _thread = None
+_rate_limit_backoff_until = 0.0
 
 
 def _process_new_messages(last_ts: str) -> str:
@@ -81,8 +82,15 @@ def _process_new_messages(last_ts: str) -> str:
             logger.info(f"Sent reply to {chat_name}: {reply[:80]}")
 
         except Exception as e:
+            err_str = str(e)
             logger.error(f"Error processing {chat_jid}: {e}")
-            db.add_log(chat_jid, chat_name, "error", str(e), status="error")
+            db.add_log(chat_jid, chat_name, "error", err_str[:500], status="error")
+            if "429" in err_str or "rate_limit" in err_str.lower():
+                global _rate_limit_backoff_until
+                _rate_limit_backoff_until = time.time() + 60
+                logger.warning("Rate limited — backing off for 60s")
+                new_last_ts = last_ts  # don't advance; retry after backoff
+                break
 
     return new_last_ts
 
@@ -100,6 +108,9 @@ def poll_loop():
     while not _stop_event.is_set():
         try:
             interval = float(db.get_setting("poll_interval") or "5")
+            if time.time() < _rate_limit_backoff_until:
+                _stop_event.wait(timeout=5)
+                continue
             new_ts = _process_new_messages(last_ts)
             if new_ts != last_ts:
                 last_ts = new_ts
