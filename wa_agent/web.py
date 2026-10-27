@@ -4,6 +4,7 @@ from urllib.parse import urlparse, parse_qs
 from . import db, bridge, poller
 
 PORT = int(os.environ.get("WA_AGENT_PORT", "3000"))
+BASE_PATH = os.environ.get("WA_AGENT_BASE_PATH", "").rstrip("/")
 
 # ─── HTML Shell ───────────────────────────────────────────────────────────────
 
@@ -67,10 +68,10 @@ def page(title, content, active):
 <meta name=viewport content="width=device-width,initial-scale=1">
 <title>{title} — WA Agent</title>{STYLE}</head><body>
 <nav>
-  <a class=logo href="/">⚡ WA Agent</a>
-  <a href="/" {"class=active" if active=="chats" else ""}>Chats</a>
-  <a href="/logs" {"class=active" if active=="logs" else ""}>Logs</a>
-  <a href="/settings" {"class=active" if active=="settings" else ""}>Settings</a>
+  <a class=logo href="{BASE_PATH}/">⚡ WA Agent</a>
+  <a href="{BASE_PATH}/" {"class=active" if active=="chats" else ""}>Chats</a>
+  <a href="{BASE_PATH}/logs" {"class=active" if active=="logs" else ""}>Logs</a>
+  <a href="{BASE_PATH}/settings" {"class=active" if active=="settings" else ""}>Settings</a>
   <span style="margin-left:auto;font-size:13px;color:#64748b">
     Agent <span class="{badge_cls}">{status}</span>
   </span>
@@ -140,7 +141,7 @@ def view_chats():
     global_prompt = db.get_setting("system_prompt", "")
     warn = ""
     if not db.get_setting("anthropic_api_key"):
-        warn = '<div class="alert alert-warn">⚠ No Anthropic API key set. Go to <a href="/settings" style="color:#fbbf24">Settings</a> to add it.</div>'
+        warn = f'<div class="alert alert-warn">⚠ No Anthropic API key set. Go to <a href="{BASE_PATH}/settings" style="color:#fbbf24">Settings</a> to add it.</div>'
 
     content = f"""
 {warn}
@@ -336,8 +337,14 @@ class Handler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", 0))
         return json.loads(self.rfile.read(length)) if length else {}
 
+    def _strip_base(self, raw_path):
+        path = urlparse(raw_path).path
+        if BASE_PATH and path.startswith(BASE_PATH):
+            path = path[len(BASE_PATH):] or "/"
+        return path
+
     def do_GET(self):
-        path = urlparse(self.path).path
+        path = self._strip_base(self.path)
         if path in ("/", "/chats"):
             self.send_html(view_chats())
         elif path == "/logs":
@@ -348,7 +355,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(404); self.end_headers()
 
     def do_POST(self):
-        path = urlparse(self.path).path
+        path = self._strip_base(self.path)
         body = self.read_body()
 
         if path == "/api/settings":
