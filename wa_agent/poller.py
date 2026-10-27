@@ -39,10 +39,13 @@ def _process_new_messages(last_ts: str) -> str:
     for msg in new_msgs:
         seen_chats[msg["chat_jid"]] = msg
 
+    def _norm(ts):
+        return ts.replace("T", " ").split(".")[0] if ts else ""
+
     new_last_ts = last_ts
     for chat_jid, trigger_msg in seen_chats.items():
         msg_ts = trigger_msg.get("timestamp", "")
-        if msg_ts > new_last_ts:
+        if _norm(msg_ts) > _norm(new_last_ts):
             new_last_ts = msg_ts
 
         # Decide if we should reply
