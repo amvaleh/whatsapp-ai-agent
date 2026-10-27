@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS agent_logs (
 """
 
 DEFAULT_SETTINGS = {
+    "provider": "anthropic_api",
     "anthropic_api_key": "",
     "model": "claude-haiku-4-5-20251001",
     "business_name": "ShootEmpire",

@@ -140,7 +140,7 @@ def view_chats():
 
     global_prompt = db.get_setting("system_prompt", "")
     warn = ""
-    if not db.get_setting("anthropic_api_key"):
+    if db.get_setting("provider", "anthropic_api") == "anthropic_api" and not db.get_setting("anthropic_api_key"):
         warn = f'<div class="alert alert-warn">⚠ No Anthropic API key set. Go to <a href="{BASE_PATH}/settings" style="color:#fbbf24">Settings</a> to add it.</div>'
 
     content = f"""
@@ -236,13 +236,22 @@ def view_settings():
         f'<option value="{m}" {"selected" if s.get("model")==m else ""}>{label}</option>'
         for m, label in models
     )
+    cur_provider = s.get("provider", "anthropic_api")
     content = f"""<h1>Settings</h1>
 <form id=settings-form>
 <div class=card>
   <h2>AI Configuration</h2>
   <div class=form-group>
+    <label>AI Provider</label>
+    <select id=provider onchange="toggleApiKey(this.value)">
+      <option value="anthropic_api" {"selected" if cur_provider=="anthropic_api" else ""}>Anthropic API Key</option>
+      <option value="claude_cli" {"selected" if cur_provider=="claude_cli" else ""}>Claude CLI (claude.ai subscription)</option>
+    </select>
+  </div>
+  <div class=form-group id=api-key-group style="{"display:none" if cur_provider=="claude_cli" else ""}">
     <label>Anthropic API Key</label>
     <input type=password id=anthropic_api_key value="{s.get('anthropic_api_key','')}" placeholder="sk-ant-...">
+    <small style="color:#64748b;font-size:12px;margin-top:4px;display:block">Get yours at console.anthropic.com</small>
   </div>
   <div class=form-group>
     <label>Model</label>
@@ -298,8 +307,11 @@ def view_settings():
 <span id=save-msg style="margin-left:12px;color:#4ade80;display:none">✓ Saved</span>
 </form>
 <script>
+function toggleApiKey(val) {{
+  document.getElementById('api-key-group').style.display = val === 'claude_cli' ? 'none' : '';
+}}
 async function saveSettings() {{
-  const keys = ['anthropic_api_key','model','business_name','system_prompt',
+  const keys = ['provider','anthropic_api_key','model','business_name','system_prompt',
     'reply_delay_min','reply_delay_max','poll_interval','max_history_messages','bridge_url'];
   const data = {{}};
   keys.forEach(k => data[k] = document.getElementById(k).value);

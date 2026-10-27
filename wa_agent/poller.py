@@ -11,6 +11,7 @@ _thread = None
 
 def _process_new_messages(last_ts: str) -> str:
     settings = db.get_all_settings()
+    provider = settings.get("provider", "anthropic_api")
     api_key = settings.get("anthropic_api_key", "")
     model = settings.get("model", "claude-haiku-4-5-20251001")
     system_prompt_tpl = settings.get("system_prompt", "You are a helpful assistant.")
@@ -23,7 +24,7 @@ def _process_new_messages(last_ts: str) -> str:
 
     system_prompt = system_prompt_tpl.replace("{business_name}", business_name)
 
-    if not api_key:
+    if provider == "anthropic_api" and not api_key:
         return last_ts
 
     new_msgs = bridge.get_new_messages(last_ts)
@@ -65,7 +66,10 @@ def _process_new_messages(last_ts: str) -> str:
 
         try:
             history = bridge.get_chat_history(chat_jid, max_history)
-            reply = ai.generate_reply(api_key, model, full_system, history)
+            if provider == "claude_cli":
+                reply = ai.generate_reply_cli(model, full_system, history)
+            else:
+                reply = ai.generate_reply(api_key, model, full_system, history)
 
             # Human-like delay
             delay = random.uniform(delay_min, delay_max)
