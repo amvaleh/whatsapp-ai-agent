@@ -89,7 +89,6 @@ def _process_new_messages(last_ts: str) -> str:
                 global _rate_limit_backoff_until
                 _rate_limit_backoff_until = time.time() + 60
                 logger.warning("Rate limited — backing off for 60s")
-                new_last_ts = last_ts  # don't advance; retry after backoff
                 break
 
     return new_last_ts
