@@ -322,7 +322,7 @@ def view_settings():
         <input type=checkbox id=auto_reply_all {"checked" if s.get('auto_reply_all')=='1' else ""}>
         <span class=slider></span>
       </label>
-      Auto-reply to ALL new chats
+      Auto-reply to new/unknown contacts (doesn't affect per-chat toggle)
     </label>
   </div>
 </div>
