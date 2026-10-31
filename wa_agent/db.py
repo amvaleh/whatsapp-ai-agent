@@ -45,7 +45,7 @@ DEFAULT_SETTINGS = {
     "reply_delay_max": "8",
     "poll_interval": "5",
     "bridge_url": "http://localhost:8080/api",
-    "auto_reply_all": "0",
+    "auto_reply_all": "1",
     "max_history_messages": "20",
 }
 

@@ -226,23 +226,12 @@ def view_logs():
 
 
 def _check_cli_status():
-    """Return (ok: bool, message: str)"""
-    import subprocess, os
-    cli = os.environ.get("CLAUDE_CLI_PATH", "/usr/local/bin/claude")
-    if not os.path.exists(cli):
-        return False, f"claude CLI not found at {cli}. Install with: npm install -g @anthropic-ai/claude-code"
-    try:
-        r = subprocess.run(
-            [cli, "--print", "-p", "reply with just: ok", "--model", "claude-haiku-4-5-20251001"],
-            capture_output=True, text=True, timeout=20
-        )
-        if r.returncode == 0:
-            return True, "Authenticated and working"
-        return False, (r.stderr.strip() or "CLI returned non-zero exit code")
-    except subprocess.TimeoutExpired:
-        return False, "CLI timed out — may not be authenticated"
-    except Exception as e:
-        return False, str(e)
+    """Return (ok: bool, message: str) — lightweight token-file check only."""
+    import os
+    token_file = os.environ.get("CLAUDE_TOKEN_FILE", "/home/deploy/wa-agent/.claude_token")
+    if os.path.exists(token_file):
+        return True, "SDK ready"
+    return False, "No OAuth token found"
 
 
 def view_settings():
@@ -333,7 +322,7 @@ def view_settings():
         <input type=checkbox id=auto_reply_all {"checked" if s.get('auto_reply_all')=='1' else ""}>
         <span class=slider></span>
       </label>
-      Auto-reply to ALL chats (overrides per-chat toggle)
+      Auto-reply to ALL new chats
     </label>
   </div>
 </div>
@@ -353,13 +342,7 @@ function toggleApiKey(val) {{
   document.getElementById('cli-status-card').style.display = val === 'claude_cli' ? '' : 'none';
 }}
 async function testCli() {{
-  const btn = event.target; btn.textContent = 'Checking...'; btn.disabled = true;
-  const r = await api('{BASE_PATH}/api/cli-status');
-  const color = r.ok ? '#4ade80' : '#f87171';
-  const icon = r.ok ? '✓' : '✗';
-  btn.closest('div').querySelector('div > div > div:first-child').style.color = color;
-  btn.closest('div').querySelector('div > div > div:first-child').textContent = 'Claude CLI: ' + r.message;
-  btn.textContent = 'Re-check'; btn.disabled = false;
+  // /api/cli-status endpoint removed; status is now shown server-side only
 }}
 async function saveSettings() {{
   const keys = ['provider','anthropic_api_key','model','business_name','system_prompt',
@@ -414,9 +397,6 @@ class Handler(BaseHTTPRequestHandler):
             self.send_html(view_logs())
         elif path == "/settings":
             self.send_html(view_settings())
-        elif path == "/api/cli-status":
-            ok, msg = _check_cli_status()
-            self.send_json({"ok": ok, "message": msg})
         else:
             self.send_response(404); self.end_headers()
 
