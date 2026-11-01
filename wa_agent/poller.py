@@ -46,8 +46,6 @@ def _process_new_messages(last_ts: str) -> str:
     new_last_ts = last_ts
     for chat_jid, trigger_msg in seen_chats.items():
         msg_ts = trigger_msg.get("timestamp", "")
-        if _norm(msg_ts) > _norm(new_last_ts):
-            new_last_ts = msg_ts
 
         # Decide if we should reply
         rule = db.get_chat_rule(chat_jid)
@@ -61,6 +59,9 @@ def _process_new_messages(last_ts: str) -> str:
             should_reply = True
 
         if not should_reply:
+            # Deliberate skip — safe to advance past this message
+            if _norm(msg_ts) > _norm(new_last_ts):
+                new_last_ts = msg_ts
             continue
 
         chat_name = resolve_chat_name(chat_jid, names, lid_map, rule)
@@ -85,6 +86,10 @@ def _process_new_messages(last_ts: str) -> str:
             db.add_log(chat_jid, chat_name, "assistant", reply)
             logger.info(f"Sent reply to {chat_name}: {reply[:80]}")
 
+            # Only advance timestamp after successful send
+            if _norm(msg_ts) > _norm(new_last_ts):
+                new_last_ts = msg_ts
+
         except Exception as e:
             err_str = str(e)
             logger.error(f"Error processing {chat_jid}: {e}")
@@ -94,6 +99,7 @@ def _process_new_messages(last_ts: str) -> str:
                 _rate_limit_backoff_until = time.time() + 60
                 logger.warning("Rate limited — backing off for 60s")
                 break
+            # On other errors: don't advance timestamp so the next poll retries
 
     return new_last_ts
 
