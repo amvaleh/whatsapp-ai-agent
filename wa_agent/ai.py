@@ -1,6 +1,5 @@
-import subprocess, os, anthropic
+import os, anthropic
 
-CLAUDE_CLI = "/usr/local/bin/claude"
 CLAUDE_TOKEN_FILE = os.environ.get("CLAUDE_TOKEN_FILE", "/home/deploy/wa-agent/.claude_token")
 
 

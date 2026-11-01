@@ -8,6 +8,7 @@ logger = logging.getLogger("wa_agent.poller")
 _stop_event = threading.Event()
 _thread = None
 _rate_limit_backoff_until = 0.0
+_process_lock = threading.Lock()
 
 
 def _process_new_messages(last_ts: str) -> str:
@@ -113,7 +114,14 @@ def poll_loop():
             if time.time() < _rate_limit_backoff_until:
                 _stop_event.wait(timeout=5)
                 continue
-            new_ts = _process_new_messages(last_ts)
+            if not _process_lock.acquire(blocking=False):
+                logger.warning("Previous _process_new_messages still running — skipping this cycle")
+                _stop_event.wait(timeout=interval)
+                continue
+            try:
+                new_ts = _process_new_messages(last_ts)
+            finally:
+                _process_lock.release()
             if new_ts != last_ts:
                 last_ts = new_ts
                 db.set_setting("_last_processed_ts", last_ts)
